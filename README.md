@@ -1,5 +1,7 @@
 # AquaGuard ML - Water Leak Detection System
 
+An intelligent water leak detection system using edge ML on ESP32 microcontrollers with multi-zone anomaly detection.
+
 ## 📦 Project Structure
 
 ```
@@ -16,7 +18,7 @@ aquaguard_project/
 └── README.md                     # This file
 ```
 
-## 🚀 Quick Start Guide
+## 🚀 Quick Start
 
 ### Step 1: Upload Arduino Code
 
@@ -26,34 +28,30 @@ aquaguard_project/
    - `Adafruit SSD1306`
    - `Adafruit GFX Library`
 
-2. **Get MAC Addresses**:
-   - Upload `Client_ESP32.ino` first
-   - Open Serial Monitor, copy the MAC address printed
-   - Paste this MAC into `Master_ESP32.ino` line 60:
+2. **Configure MAC Addresses**:
+   - Upload `Client_ESP32.ino` first and note its MAC address from Serial Monitor
+   - Update `Master_ESP32.ino` line 60 with the client MAC:
      ```cpp
-     uint8_t clientNodeMAC[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}; // Your client MAC
+     uint8_t clientNodeMAC[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
+     ```
+   - Upload `Master_ESP32.ino` and note its MAC address
+   - Update `Client_ESP32.ino` line 8 with the master MAC:
+     ```cpp
+     uint8_t masterNodeMAC[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
      ```
 
-3. **Upload Master Code**:
-   - Upload `Master_ESP32.ino` to your master ESP32
-   - Open Serial Monitor, copy the Master MAC address
-   - Paste this into `Client_ESP32.ino` line 8:
-     ```cpp
-     uint8_t masterNodeMAC[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66}; // Your master MAC
-     ```
-
-4. **Set RTC Time** (one-time setup):
-   - In `Master_ESP32.ino`, uncomment line 466:
+3. **Set RTC Time** (one-time setup):
+   - Uncomment line 466 in `Master_ESP32.ino`:
      ```cpp
      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
      ```
-   - Upload once, then comment it back out
+   - Upload, then comment out and re-upload
 
-### Step 2: Connect Hardware
+### Step 2: Hardware Connections
 
 **Master Node:**
 - Flow Sensor → Pin 4
-- Relay (for solenoid) → Pin 5
+- Relay (solenoid) → Pin 5
 - Green LED → Pin 12
 - Yellow LED → Pin 13
 - Red LED → Pin 14
@@ -63,122 +61,92 @@ aquaguard_project/
 **Client Node:**
 - Flow Sensor → Pin 4
 
-### Step 3: Set Up Serial Bridge
+### Step 3: Serial Bridge Setup
 
-1. **Install Node.js** (if not already installed):
-   - Download from: https://nodejs.org/
-
-2. **Install Dependencies**:
+1. Install [Node.js](https://nodejs.org/) if not already installed
+2. Navigate to `serial_bridge/` and run:
    ```bash
-   cd serial_bridge
    npm install
-   ```
-
-3. **Configure Serial Port**:
-   - Edit `bridge.js` line 8:
-     - **Windows**: `const SERIAL_PORT = 'COM3';` (check Device Manager)
-     - **Linux**: `const SERIAL_PORT = '/dev/ttyUSB0';`
-     - **macOS**: `const SERIAL_PORT = '/dev/cu.usbserial-XXXX';`
-
-4. **Start the Bridge**:
-   ```bash
    npm start
    ```
+3. Edit `bridge.js` line 8 to configure your serial port:
+   - **Windows**: `COM3` (check Device Manager)
+   - **Linux**: `/dev/ttyUSB0`
+   - **macOS**: `/dev/cu.usbserial-XXXX`
 
-   You should see:
-   ```
-   ========================================
-     AQUAGUARD SERIAL-TO-WEB BRIDGE
-   ========================================
-   HTTP Server: http://localhost:3001
-   WebSocket Server: ws://localhost:3001
-   Serial Port: /dev/ttyUSB0 @ 115200 baud
-   ========================================
-   ```
+### Step 4: Web Integration
 
-### Step 4: Integrate with Your Website
-
-#### Option A: Use the Example Dashboard
-Open `web_integration/index.html` in a browser. It will connect to the bridge automatically.
-
-#### Option B: Integrate into Your Existing Website
-
-Add this JavaScript code to your website:
+Open `web_integration/index.html` in a browser, or integrate the bridge into your existing site:
 
 ```javascript
-// Connect to the bridge
 const ws = new WebSocket('ws://localhost:3001');
 
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
-  
   if (message.type === 'state_update') {
-    // Update your UI with message.data
     console.log('Flow:', message.data.flow);
     console.log('State:', message.data.state);
     console.log('Learning Mode:', message.data.learningMode);
   }
 };
 
-// Send commands to ESP32
 function sendCommand(cmd) {
   ws.send(JSON.stringify({ action: cmd }));
 }
-
-// Example: Reset system
-sendCommand('RESET');
 ```
 
-## 🧠 Understanding the ML System
+## 🧠 ML System Overview
 
-### How It Works
+The system learns normal water usage patterns over 30 days, then detects anomalies using statistical analysis:
 
-The system learns for **30 days** by observing water usage patterns:
+### Data Collection (Days 1-30)
+- Hourly flow rate averaging and standard deviation calculation
+- Data persisted in EEPROM (survives power loss)
 
-1. **Data Collection** (Days 1-30):
-   - Every hour, the system records average water flow
-   - Stores: average flow rate, standard deviation, sample count
-   - Data persists in EEPROM (survives power loss)
+### Anomaly Detection (After Day 30)
+- Each hour has a learned usage profile (e.g., 8 AM avg = 4.2 L/min, σ = 1.5)
+- Uses Z-score analysis: `Z = (current - average) / std_dev`
+- Flow > 2.5σ from mean = anomalous
+- Detects non-usage hour anomalies (avg < 0.2 L/min with low variance)
 
-2. **Pattern Recognition** (After Day 30):
-   - Each hour has a "learned profile"
-   - Example: Hour 3 (3 AM) → avg 0.05 L/min, std dev 0.02
-   - Example: Hour 8 (8 AM) → avg 4.2 L/min, std dev 1.5
+### Key Features
+- **Edge computing** - No cloud dependency
+- **Adaptive** - Learns building-specific patterns
+- **Resilient** - Survives power loss via EEPROM
+- **Lightweight** - Runs on microcontroller
+- **Self-calibrating** - No manual threshold configuration
 
-3. **Anomaly Detection**:
-   - Uses Z-score statistics: `Z = (current - average) / std_dev`
-   - If Z-score > 2.5 → anomalous flow
-   - Non-usage hours: avg < 0.2 L/min AND std dev < 0.15
+## 📊 FSM States
 
-**Key Points:**
-- ✅ No cloud required - edge computing
-- ✅ Adapts to building-specific patterns
-- ✅ Survives power loss (EEPROM storage)
-- ✅ Lightweight - runs on microcontroller
-- ✅ Self-calibrating - no manual configuration
-
-## 📊 FSM States Explained
-
-| State | Condition | Action |
-|-------|-----------|--------|
-| IDLE | Flow < 0.1 L/min | Green LED |
-| NORMAL_FLOW | 0.1 < Flow < 0.5 L/min | Green LED |
-| CONTINUOUS_FLOW | Flow sustained > 5 sec | Green LED |
-| OVERUSAGE | Flow > 30 minutes | Yellow LED + "TAP LEFT ON" alert |
-| MINI_LEAK | Flow > 0.5 L/min for 10 min | Yellow LED + Warning |
-| NON_USAGE_TIME_LEAK | Flow > 0.3 L/min for 2 min during ML-detected non-usage hour | Red LED + Alert |
-| CRITICAL_LEAK | Flow > 10 L/min for 1 min OR mass-balance violation | Red LED + Alert |
-| CUTOFF | Critical leak persists | **VALVE CLOSES** + Red LED flashing |
+| State | Trigger | LED | Action |
+|-------|---------|-----|--------|
+| IDLE | Flow < 0.1 L/min | Green | Normal |
+| NORMAL_FLOW | 0.1–0.5 L/min | Green | Normal |
+| CONTINUOUS_FLOW | >5 sec sustained flow | Green | Normal |
+| OVERUSAGE | >30 min flow | Yellow | Alert |
+| MINI_LEAK | >0.5 L/min for 10 min | Yellow | Warning |
+| NON_USAGE_TIME_LEAK | >0.3 L/min for 2 min during non-usage hours | Red | Alert |
+| CRITICAL_LEAK | >10 L/min for 1 min or mass-balance violation | Red | Alert |
+| CUTOFF | Critical leak persists | Red (flashing) | **Valve closes** |
 
 ## 🔧 Serial Commands
 
-Open Serial Monitor (115200 baud) and type:
+Open Serial Monitor (115200 baud) and send:
 
-- `STATUS` - Show current learning status and hourly patterns
-- `RESET` - Reset system to IDLE state and reopen valve
-- `CUTOFF` - Trigger emergency cutoff manually
-- `RESET_LEARNING` - Clear all learning data and restart 30-day cycle
-- `SAVE` - Manually save learning data to EEPROM
+- `STATUS` - Show learning progress and hourly patterns
+- `RESET` - Return to IDLE state and reopen valve
+- `CUTOFF` - Manually trigger emergency cutoff
+- `RESET_LEARNING` - Clear data and restart 30-day cycle
+- `SAVE` - Manually persist learning data to EEPROM
 
+## 🐛 Troubleshooting
 
+| Issue | Solution |
+|-------|----------|
+| ESP32 won't upload | Hold BOOT button while uploading; verify "ESP32 Dev Module" is selected |
+| Bridge can't find serial port | Check `SERIAL_PORT` in `bridge.js` matches Device Manager / `dmesg` |
+| WebSocket won't connect | Verify bridge is running; check firewall isn't blocking port 3001 |
 
+## 📄 License
+
+[Add your license here]
