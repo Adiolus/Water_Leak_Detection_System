@@ -146,7 +146,3 @@ Open Serial Monitor (115200 baud) and send:
 | ESP32 won't upload | Hold BOOT button while uploading; verify "ESP32 Dev Module" is selected |
 | Bridge can't find serial port | Check `SERIAL_PORT` in `bridge.js` matches Device Manager / `dmesg` |
 | WebSocket won't connect | Verify bridge is running; check firewall isn't blocking port 3001 |
-
-## 📄 License
-
-[Add your license here]
