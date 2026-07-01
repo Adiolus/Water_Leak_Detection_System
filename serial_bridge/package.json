@@ -1,0 +1,17 @@
+{
+  "name": "aquaguard-serial-bridge",
+  "version": "1.0.0",
+  "description": "Serial to WebSocket bridge for AquaGuard water monitoring system",
+  "main": "bridge.js",
+  "scripts": {
+    "start": "node bridge.js"
+  },
+  "keywords": ["serial", "websocket", "arduino", "esp32", "water-monitoring"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "serialport": "^12.0.0",
+    "ws": "^8.14.2"
+  }
+}
